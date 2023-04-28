@@ -1,6 +1,10 @@
+import io
+import tempfile
 import cv2
 import numpy as np
-from object_detection import ObjectDetection
+from main.services.object_detection import ObjectDetection
+import asyncio
+from io import BytesIO
 
 
 class DetectorServices:
@@ -25,18 +29,20 @@ class DetectorServices:
 
         return len(unique_centroids)
 
-    def process_video(self):
+    def process_video(self, video):
         # Initialize the classifier
         od_model = ObjectDetection()
+       
+        cap = cv2.VideoCapture(video)
+        if not cap.isOpened():
+            raise ValueError("Could not open the video stream")
 
-        # Get the video
-        video = cv2.VideoCapture(r"./videos/video.mp4")
-
-        # Get the frame rate of the video
-        fps = video.get(cv2.CAP_PROP_FPS)
+        # cap = cv2.VideoCapture(video_bytes)
 
         while True:
-            ret, frame = video.read()
+            ret, frame = cap.read()
+
+            frame_nparray = np.array(frame)
 
             if ret:
                 # Detect objects on frame
@@ -69,28 +75,25 @@ class DetectorServices:
                         cv2.circle(frame, centroid, 4, (0, 255, 0 ), -1)
 
                 # Count vehicles
-                vehicle_count = self.count_vehicles()
-                print(f"Number of unique vehicles: {vehicle_count}")
+                # vehicle_count = self.count_vehicles()
+                print(f"Number of unique vehicles: {self.car_count}")
 
                 # Draw the vehicle count on the frame
-                cv2.putText(frame, f"Vehicle count: {vehicle_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                # cv2.putText(frame, f"Vehicle count: {vehicle_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-                # Show the frame
-                cv2.imshow("Vehicle Detection", frame)
-                cv2.waitKey(1)
+                # # Show the frame
+                # cv2.imshow("Vehicle Detection", frame)
+                # cv2.waitKey(1)
 
             else:
                 break
 
         # Release the video capture object and close all windows
-        video.release()
+        cap.release()
         cv2.destroyAllWindows()
 
 
 
-if __name__ == "__main__":
-    detector = DetectorServices()
-    detector.process_video()
 
 
 # tracker_name = str(tracker).split()[0][1:]
