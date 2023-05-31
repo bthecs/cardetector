@@ -4,3 +4,11 @@ env
 main/services/videos
 main/services/dnn_model
 __pycache__
+*.pt
+*.h5
+*dataset
+*custom-anchors
+*txt_annotations
+*dataset_final
+*annotations
+*.png
