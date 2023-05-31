@@ -2,115 +2,74 @@ import io
 import tempfile
 import cv2
 import numpy as np
-from main.services.object_detection import ObjectDetection
-import asyncio
-from io import BytesIO
+import torch
 
 
 class DetectorServices:
 
     def __init__(self):
-        self.car_count = 0
-        self.centroids = []
-        self.tracker_list = []
+        self.vehicle_count = 0
+        self.tracked_vehicles = {}
 
-    def count_vehicles(self):
-        # Count the number of unique vehicles
-        unique_centroids = []
-        for c in self.centroids:
-            is_unique = True
-            for uc in unique_centroids:
-                dist = np.sqrt((c[0] - uc[0]) ** 2 + (c[1] - uc[1]) ** 2)
-                if dist < 50:  # If a centroid is closer than 50 pixels to another centroid, consider it the same vehicle
-                    is_unique = False
-                    break
-            if is_unique:
-                unique_centroids.append(c)
+    def distance(self, point1, point2):
+        x1, y1 = point1
+        x2, y2 = point2
+        return np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
-        return len(unique_centroids)
 
     def process_video(self, video):
-        # Initialize the classifier
-        od_model = ObjectDetection()
-       
+        # Cargar el modelo de YOLOv5 pre-entrenado
+        model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+
+        # Creamos el objeto para leer el video
         cap = cv2.VideoCapture(video)
-        if not cap.isOpened():
-            raise ValueError("Could not open the video stream")
 
-        # cap = cv2.VideoCapture(video_bytes)
-
-        while True:
+        # Iteramos sobre todos los cuadros del video
+        while cap.isOpened():
+            # Leemos el cuadro actual
             ret, frame = cap.read()
-
-            frame_nparray = np.array(frame)
-
-            if ret:
-                # Detect objects on frame
-                (class_ids, scores, boxes) = od_model.detect(frame)
-
-                for box in range(len(boxes)):
-                    if class_ids[box] == 2:
-                        # Get the centroid of the vehicle
-                        (x, y, w, h) = boxes[box]
-                        centroid = (x + w//2, y + h//2)
-
-                        # Check if the centroid is close to another centroid already in the list
-                        is_unique = True
-                        for c in self.centroids:
-                            dist = np.sqrt((centroid[0] - c[0]) ** 2 + (centroid[1] - c[1]) ** 2)
-                            if dist < 50:
-                                is_unique = False
-                                break
-
-                        if is_unique:
-                            # Increment the number of unique cars found
-                            self.car_count += 1
-
-                            # Add the centroid to the list
-                            self.centroids.append(centroid)
-
-                           
-                        # Draw bounding box and centroid
-                        cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
-                        cv2.circle(frame, centroid, 4, (0, 255, 0 ), -1)
-
-                # Count vehicles
-                # vehicle_count = self.count_vehicles()
-                print(f"Number of unique vehicles: {self.car_count}")
-
-                # Draw the vehicle count on the frame
-                # cv2.putText(frame, f"Vehicle count: {vehicle_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
-                # # Show the frame
-                # cv2.imshow("Vehicle Detection", frame)
-                # cv2.waitKey(1)
-
-            else:
+            if not ret:
                 break
 
-        # Release the video capture object and close all windows
+            # Detectamos los objetos en el cuadro utilizando YOLOv5
+            results = model(frame)
+
+            # Recorremos los resultados de detección y rastreamos los vehículos
+            for obj in results.xyxy[0]:
+                if obj[-1] == 2:  # Verificamos si el objeto es un vehículo
+                    x1, y1, x2, y2 = map(int, obj[:4])
+                    centroid = ((x1 + x2) // 2, (y1 + y2) // 2)  # Calculamos el centroide del vehículo
+
+                    # Buscamos el vehículo más cercano al centroide actual
+                    min_distance = float('inf')
+                    nearest_vehicle_id = None
+                    for vehicle_id, last_centroid in self.tracked_vehicles.items():
+                        dist = self.distance(centroid, last_centroid)
+                        if dist < min_distance:
+                            min_distance = dist
+                            nearest_vehicle_id = vehicle_id
+
+                    # Si el vehículo más cercano está lo suficientemente cerca, lo asociamos al vehículo actual
+                    if nearest_vehicle_id is not None and min_distance < 60:
+                        self.tracked_vehicles[nearest_vehicle_id] = centroid
+                    # Si no hay vehículos cercanos, lo consideramos un vehículo nuevo y lo agregamos al diccionario
+                    else:
+                        self.tracked_vehicles[len(self.tracked_vehicles)] = centroid
+                        self.vehicle_count += 1
+
+            # Mostramos el cuadro actual con los centroides y la cantidad de vehículos detectados
+            for vehicle_id, centroid in self.tracked_vehicles.items():
+                cv2.circle(frame, centroid, 5, (0, 255, 0), -1)
+                cv2.putText(frame, f'ID: {vehicle_id}', (centroid[0] + 10, centroid[1] + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            cv2.putText(frame, f'VEHICLES: {self.vehicle_count}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.imshow('Video', frame)
+
+            # Esperamos la tecla 'q' para salir del bucle
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        # Liberamos la captura y cerramos todas las ventanas
         cap.release()
         cv2.destroyAllWindows()
 
-
-
-
-
-# tracker_name = str(tracker).split()[0][1:]
-# cap = cv2.VideoCapture(0)
-# ret,frame = cap.read()
-# roi = cv2.selectROI(frame,False)
-
-# ret = tracker.init(frame,roi)
-
-# while True:
-#     ret, frame = cap.read()
-#     success,roi = tracker.update(frame)
-#     (x,y,w,h) = tuple(map(int,roi))
-#     if success:
-#         p1 = (x,y)
-#         p2 = (x+w,y+h)
-#         cv2.rectangle(frame,pt1=p1,pt2=p2,color=(0,255,0),thickness=3)
-#         roi = frame[y:y+h,x:x+w]
-#     else:
-#         cv2.putText(frame,text="Failure to Detect Track
+        
