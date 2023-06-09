@@ -19,10 +19,8 @@ def detect():
     with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(video.read())
             video_path = f.name
-    thread = threading.Thread(target=DetectorServices().process_video, args=(video_path,))
-    thread.start()
-
-    return "Video received", 200 
+    video_final = DetectorServices().process_video(video_path)
+    return jsonify(video_final), 200 
     # return DetectorServices().process_video(video), 200
 
 @detector.route('/matricula', methods=['POST'])

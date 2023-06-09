@@ -3,10 +3,13 @@ import cv2
 from .detector_matricula import LicensePlateDetector
 import pytesseract
 import tempfile
+import time
+from datetime import datetime, timedelta
 
 
 class License:
     def detect_license_plate(self, video, day, plate_lic):
+        start = time.time()
         # Cargar weights
         weights = f"main\services\custom-anchors"
         iou = 0.45
@@ -39,8 +42,9 @@ class License:
 
             duration = frame_id / fps
 
-            # FORMATEAR DURATION A .2F
-            duration = "{:.2f}".format(duration)
+            # Pasar duration a formato hh:mm:ss
+            duration = time.strftime("%H:%M:%S", time.gmtime(duration))
+
 
             print("El vehiculo esta en el segundo {}".format(duration)+" Con la patente {}".format(plate))
             if plate is not None:
@@ -55,7 +59,15 @@ class License:
             frame_id += 1
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        
+        final = time.time()
+        tiempo = final - start
+
+        execution_time = timedelta(seconds=tiempo)
+
+        execution_time_formated = str(datetime.min + execution_time)
+
+        with open('main/logs/license_plate.txt', 'a') as f:
+            f.write(f"Total de patentes detectadas {len(data)}, Tiempo de ejecucion: {execution_time_formated}\n")
         return data   
 
 
