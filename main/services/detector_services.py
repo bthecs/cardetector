@@ -3,6 +3,8 @@ import tempfile
 import cv2
 import numpy as np
 import torch
+import time
+from datetime import datetime, timedelta
 
 
 class DetectorServices:
@@ -18,6 +20,7 @@ class DetectorServices:
 
 
     def process_video(self, video):
+        start = time.time()
         # Cargar el modelo de YOLOv5 pre-entrenado
         model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
 
@@ -26,6 +29,8 @@ class DetectorServices:
 
         # Iteramos sobre todos los cuadros del video
         while cap.isOpened():
+            # Iniciar un contador de tiempo
+
             # Leemos el cuadro actual
             ret, frame = cap.read()
             if not ret:
@@ -63,13 +68,32 @@ class DetectorServices:
                 cv2.putText(frame, f'ID: {vehicle_id}', (centroid[0] + 10, centroid[1] + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
             cv2.putText(frame, f'VEHICLES: {self.vehicle_count}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             cv2.imshow('Video', frame)
-
             # Esperamos la tecla 'q' para salir del bucle
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
+
         # Liberamos la captura y cerramos todas las ventanas
         cap.release()
         cv2.destroyAllWindows()
+        # finalizar el contador de tiempo
+        final = time.time()
+
+        tiempo = final - start
+
+        execution_time = timedelta(seconds=tiempo)
+
+        execution_time_formated = str(datetime.min + execution_time)
+
+        data = [{
+            "Total de vehiculos en el video": self.vehicle_count
+        }]
+
+        # Crear log de sistema
+        with open('main/logs/census.txt', 'a') as f:
+            f.write(f"Total de vehiculos en el video: {self.vehicle_count}, Tiempo que tardo el sistema: {execution_time_formated[11:]} \n")
+        
+        return data
+        
 
         
